@@ -1,0 +1,222 @@
+clc
+close all 
+
+x = TemperaturedegC(1:end)+273.15;
+y0 = Abs;
+y0s = smooth(Abs,91);
+
+figure
+hold on
+plot(x,y0,'-k')
+hold off
+hold on
+plot(x,y0s,':r')
+
+% first derivative
+    delY = diff(y0s);
+    delX = diff(x);
+    y1 = delY ./ delX;
+    
+% second derivative
+    delY2 = diff(y1);
+    delX2 = delX(2:end);
+    y2 = delY2./delX2;
+
+% plot derivatives
+    figure
+    plot(x(3:end),y2,'-k')
+
+%% PICK FLANKS
+
+% Upper linear region first
+    
+%% Define Upper Linear Region
+figure
+plot(x(3:end),y2,'*')
+[xU,yU] = ginput(2)
+    
+[~,xU1]=min(abs(x-xU(1)))
+[~,xU2]=min(abs(x-xU(2)))
+
+figure
+plot(x,y0,'*')
+hold on
+plot(x(xU1:xU2),y0(xU1:xU2),'*r')
+
+ULRx = x(xU1:xU2);
+ULRy = y0(xU1:xU2);
+
+%% Fit: 'Upper Linear Region'.
+[xData, yData] = prepareCurveData( ULRx, ULRy );
+
+% Set up fittype and options.
+ft = fittype( 'm*x+b', 'independent', 'x', 'dependent', 'y' );
+opts = fitoptions( 'Method', 'NonlinearLeastSquares' );
+opts.Display = 'Off';
+opts.StartPoint = [0.474155088281866 0.278498218867048];
+
+% Fit model to data.
+[myfit, gof] = fit( xData, yData, ft, opts );
+
+% Plot fit with data.
+figure( 'Name', 'Upper Linear Region' );
+h = plot( myfit, x, y0 );
+legend( h, 'ULRy vs. ULRx', 'Upper Linear Region', 'Location', 'Best' );
+% Label axes
+xlabel ULRx
+ylabel ULRy
+grid on
+
+ULR_fits = coeffvalues(myfit);
+ULR_b = ULR_fits(1);
+ULR_m = ULR_fits(2);
+
+%% Define Lower Linear Region
+
+figure
+plot(x(3:end),y2,'*')
+[xL,yL] = ginput(2)
+    
+[~,xL1]=min(abs(x-xL(1)))
+[~,xL2]=min(abs(x-xL(2)))
+
+figure
+plot(x,y0,'*')
+hold on
+plot(x(xL1:xL2),y0(xL1:xL2),'*r')
+
+LLRx = x(xL1:xL2);
+LLRy = y0(xL1:xL2);
+
+%% Fit: 'Lower Linear Region'.
+[xData, yData] = prepareCurveData( LLRx, LLRy );
+
+% Set up fittype and options.
+ft2 = fittype( 'm*x+b', 'independent', 'x', 'dependent', 'y' );
+opts = fitoptions( 'Method', 'NonlinearLeastSquares' );
+opts.Display = 'Off';
+opts.StartPoint = [0.474155088281866 0.278498218867048];
+
+% Fit model to data.
+[myfit2, gof] = fit( xData, yData, ft2, opts );
+
+% Plot fit with data.
+figure( 'Name', 'Lower Linear Region' );
+h = plot( myfit2, x, y0 );
+legend( h, 'ULRy vs. ULRx', 'Lower Linear Region', 'Location', 'Best' );
+% Label axes
+xlabel Temperature
+ylabel Absorbance
+grid on
+
+LLR_fits = coeffvalues(myfit2);
+LLR_b = LLR_fits(1);
+LLR_m = LLR_fits(2);
+%% plot of both upper % Lower fits
+plot( myfit2, x, y0 )
+hold on
+plot( myfit, x, y0 )
+hold off
+%% Fit the middle
+figure
+plot(x(3:end),y2,'*')
+[xM,yM] = ginput(2)
+    
+[~,xM1]=min(abs(x-xM(1)))
+[~,xM2]=min(abs(x-xM(2)))
+
+figure
+plot(x,y0,'*')
+hold on
+plot(x(xM1:xM2),y0(xM1:xM2),'*r')
+
+MLRx = x(xM1:xM2);
+MLRy = y0(xM1:xM2);
+
+%% Fit the rest
+
+% define constants first
+R = 8.3144598; % J/(mol*K)
+Ct = 1*10^(-6); % in terms of Molar
+
+% define K & f
+K = exp(-dH/(R*T)+dS/R);
+f = 1-(((2*Ct*exp(-dH./(R*T)+dS/R)+1).^(0.5)+1)/(Ct*exp(-dH/(R*T)+dS/R)));
+
+% define Ad & As
+Ad = LLR_m.*x+LLR_b; 
+As = ULR_m.*x+ULR_b;
+
+% equation to fit
+A = sprintf('(1-(((2*Ct*exp(-dH./(8.3144598*x)+dS/8.3144598)+1).^(0.5)+1)/(Ct*exp(-dH./(8.3144598*x)+dS/8.3144598))))*((%d.*x+%d)-(%d.*x+%d))+(%d.*x+%d)',LLR_m,LLR_b,ULR_m,ULR_b,ULR_m,ULR_b)
+
+
+%% Fit: Initial Fit to the middle of the data
+[xData, yData] = prepareCurveData( MLRx, MLRy );
+
+% Set up fittype and options.
+ft3 = fittype(sprintf(...
+    '(1-(((2*(10^-6)*exp(-dH./(8.3144598*x)+dS/8.3144598)+1).^(0.5)+1)/((10^-6)*exp(-dH./(8.3144598*x)+dS/8.3144598))))*((%d.*x+%d)-(%d.*x+%d))+(%d.*x+%d)',...
+    LLR_m,LLR_b,ULR_m,ULR_b,ULR_m,ULR_b)...
+    , 'independent', 'x', 'dependent', 'y' );
+opts = fitoptions( 'Method', 'NonlinearLeastSquares' );
+opts.Display = 'Off';
+% opts.StartPoint = [0.474155088281866 0.278498218867048];
+
+% Fit model to data.
+[myfit3, gof] = fit( xData, yData, ft3, opts );
+
+% Plot fit with data.
+figure( 'Name', 'Lower Linear Region' );
+h = plot( myfit3, x, y0 );
+legend( h, 'MLRy vs. MLRx', 'Lower Linear Region', 'Location', 'Best' );
+% Label axes
+xlabel Temperature
+ylabel Absorbance
+grid on
+
+MLR_fits = coeffvalues(myfit3)
+MLR_dH = MLR_fits(1); %dH
+MLR_dS = MLR_fits(2); %dS
+
+%% Fit: Initial Fit to the middle of the data
+[xData, yData] = prepareCurveData( x, y0 );
+
+% Set up fittype and options.
+ft4 = fittype(...
+    '(1-(((2*(10^-6)*exp(-dH./(8.3144598*x)+dS/8.3144598)+1).^(0.5)+1)/((10^-6)*exp(-dH./(8.3144598*x)+dS/8.3144598))))*((LLR_m.*x+LLR_b)-(ULR_m.*x+ULR_b))+(ULR_m.*x+ULR_b)'...
+    , 'independent', 'x', 'dependent', 'y' );
+opts = fitoptions( 'Method', 'NonlinearLeastSquares' );
+opts.Display = 'Off';
+
+opts.StartPoint = [LLR_b LLR_m ULR_b ULR_m MLR_dH MLR_dS];
+
+% Fit model to data.
+[myfit4, gof] = fit( xData, yData, ft4, opts );
+
+% Plot fit with data.
+figure( 'Name', 'Data Fit' );
+h = plot( myfit4, x, y0 );
+legend( h, 'data', 'Lower Linear Region', 'Location', 'Best' );
+% Label axes
+xlabel Temperature
+ylabel Absorbance
+grid on
+
+MLR_fits = coeffvalues(myfit4)
+ %MLR_dH = LLR_fits(1); %dH
+ %MLR_dS = LLR_fits(2); %dS
+
+
+%creating the sliders
+DeltaH = uicontrol('Style','slider','String','DeltaH','Position',[450,150,100,25]);
+DeltaS = uicontrol('Style','slider','String','DeltaS','Position',[450,200,100,25]);
+%creating the plot
+PL = axes('Units','pixels','Position',[70,50,350,330]);
+axes(PL)
+plot(x(1:1101),y0(1:1101))
+hold on
+h = plot( myfit4, x, y0 );
+guide
+
+
